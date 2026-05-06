@@ -179,7 +179,7 @@ stage.on('dragend', function () {
 
 const bglayer = new Konva.Layer();
 stage.add(bglayer);
-var gridSpacing = 40;
+var gridSpacing = 25;
 var gridRange = 2000;
 for (var x = -gridRange; x <= gridRange; x += gridSpacing) {
   for (var y = -gridRange; y <= gridRange; y += gridSpacing) {
@@ -206,6 +206,7 @@ const floorplan = new Konva.Rect({
     shadowBlur: 10, 
     shadowOffsetY: 4,
 });
+
 const floorPlanLabel = new Konva.Text();
 const group = new Konva.Group();
 const chairXY = (pixels * 5);
@@ -218,9 +219,11 @@ const addChairButton = document.getElementById('add-chair');
 const addShelfButton = document.getElementById('add-shelf');
 const deleteNode = document.getElementById('delete-node');
 let initialScale = 1; 
+
 group.add(floorplan);
 group.add(floorPlanLabel);
 floorlayer.add(group);
+
 let w, h, inputX = 1, inputY = 1;
 form.addEventListener('change', function(e){
   let value = Number(e.target.value);
@@ -254,7 +257,13 @@ const chairGroup = new Konva.Group({
 });
 
 const chairLabel = new Konva.Text({
-  text: 'Chair 5x5',
+  text: 'Chair 5x5ft',
+  x: 9,
+  y: 2,
+  fontSize: 9,
+  rotation: 45,
+  fill: '#ffffff',
+  fontFamily: 'system-ui, -apple-system,"Segoe UI", Roboto,"Helvetica Neue", Arial,"Noto Sans", "Liberation Sans",sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;'
 });
 
 const chair = new Konva.Rect({ 
@@ -280,7 +289,13 @@ const shelfGroup = new Konva.Group({
 });
 
 const selfLabel = new Konva.Text({
-  text: 'Shelf 10x3',
+  text: 'Shelf 10x3ft',
+  x: 5,
+  y: 5,
+  fontSize: 10,
+  fill: '#ffffff',
+  fontFamily: 'system-ui, -apple-system,"Segoe UI", Roboto,"Helvetica Neue", Arial,"Noto Sans", "Liberation Sans",sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;'
+
 });
 
 const shelf = new Konva.Rect({ 
@@ -316,6 +331,8 @@ furniturelayer.add(selectionRectangle);
 let chairI = 0;
 let shelfI = 0;
 let newChair;
+let selected;
+
 addChairButton.addEventListener('click', function(e){
   e.preventDefault();
   newChair = chairGroup.clone({
@@ -323,16 +340,10 @@ addChairButton.addEventListener('click', function(e){
   })
   furniturelayer.add(newChair);
   tr.nodes([newChair]);
+  selected = newChair;
   furniturelayer.batchDraw();
   chairI++;
 });
-
-
-chairGroup.on('click', ()=> {
-  console.log('clicked');
-  tr.node(); //clear group
-  tr.node([chairGroup]);
-})
 
 
 addShelfButton.addEventListener('click', function(e){
@@ -342,19 +353,11 @@ addShelfButton.addEventListener('click', function(e){
   });
   furniturelayer.add(newShelf);
   tr.nodes([newShelf]);
+  selected = newShelf;
   furniturelayer.batchDraw();
   shelfI++;
 });
 
-// furniture.on('click', function(){
-//   console.log(this);
-  
-// });
-
-
-deleteNode.addEventListener('click',function(e){
-  e.preventDefault();
-});
 
 
 let x1, y1, x2, y2;
@@ -413,42 +416,48 @@ stage.on('mouseup touchend', () => {
 
 // clicks should select/deselect shapes
 stage.on('click tap', function (e) {
-// if we are selecting with rect, do nothing
-if (selectionRectangle.visible() && selectionRectangle.width() > 0 && selectionRectangle.height() > 0) {
-  return;
-}
+  if (
+    selectionRectangle.visible() &&
+    selectionRectangle.width() > 0 &&
+    selectionRectangle.height() > 0
+  ) {
+    return;
+  }
 
-  // if click on empty area - remove all selections
   if (e.target === stage) {
     tr.nodes([]);
+    furniturelayer.batchDraw();
     return;
   }
 
-  // do nothing if clicked NOT on our rectangles
-  if (!e.target.hasName('furniture')) {
+  // Find the parent group named "furniture"
+  const furnitureNode = e.target.findAncestor('.furniture', true);
+
+  if (!furnitureNode) {
     return;
   }
 
-  // do we pressed shift or ctrl?
   const metaPressed = e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey;
-  const isSelected = tr.nodes().indexOf(e.target) >= 0;
-
+  const isSelected = tr.nodes().indexOf(furnitureNode) >= 0;
+  selected = furnitureNode;
   if (!metaPressed && !isSelected) {
-    // if no key pressed and the node is not selected
-    // select just one
-    tr.nodes([e.target]);
+    tr.nodes([furnitureNode]);
   } else if (metaPressed && isSelected) {
-    // if we pressed keys and node was selected
-    // we need to remove it from selection:
-    const nodes = tr.nodes().slice(); // use slice to have new copy of array
-    // remove node from array
-    nodes.splice(nodes.indexOf(e.target), 1);
+    const nodes = tr.nodes().slice();
+    nodes.splice(nodes.indexOf(furnitureNode), 1);
     tr.nodes(nodes);
   } else if (metaPressed && !isSelected) {
-    // add the node into selection
-    const nodes = tr.nodes().concat([e.target]);
-    tr.nodes(nodes);
+    tr.nodes(tr.nodes().concat([furnitureNode]));
   }
+
+  furniturelayer.batchDraw();
+});
+
+deleteNode.addEventListener('click',function(e){
+  e.preventDefault();
+  selected.remove();
+  tr.nodes([]);
+  furniturelayer.batchDraw();
 });
 
 
