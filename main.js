@@ -1,15 +1,15 @@
-
-
 //create a stage
 const pixels = 10;
 
+const sceneWidth = 1024;
+const sceneHeight = 720;
+
 const stage = new Konva.Stage({
   container: 'create-a-space',
-  width: 1024,
-  height: 720,  
+  width: sceneWidth,
+  height: sceneHeight,  
   draggable: true
 });
-
 
 // Zoom relative to pointer
 const SCALE_FACTOR = 1.05;
@@ -123,6 +123,11 @@ const SCROLL_SPEED = 2;
 
 let scrollInterval = null;
 
+
+const stageWidth = stage.width();
+const stageHeight = stage.height();
+
+
 stage.on('dragstart', function (event) {
   scrollInterval = setInterval(function () {
     const pointerPosition = stage.getPointerPosition();
@@ -134,9 +139,7 @@ stage.on('dragstart', function (event) {
     const pointerX = pointerPosition.x;
     const pointerY = pointerPosition.y;
 
-    const stageWidth = stage.width();
-    const stageHeight = stage.height();
-
+    
     const draggedNode = event.target;
 
     // Check horizontal edges
@@ -213,7 +216,7 @@ const chairXY = (pixels * 5);
 const shelfX = (pixels * 10);
 const shelfY = (pixels * 3);
 const padding = 20;
-let lastAddedElementXY = {x: 0, y: 0};
+let lastAddedElementXY = [{x: 0, y: 0, id: 0}];
 let form = document.querySelector('form');
 const addChairButton = document.getElementById('add-chair');
 const addShelfButton = document.getElementById('add-shelf');
@@ -225,6 +228,21 @@ group.add(floorPlanLabel);
 floorlayer.add(group);
 
 let w, h, inputX = 1, inputY = 1;
+
+function getCenterPoint(stageWidth, stageHeight, floorWidth, floorHeight){
+  stageWidth = stageWidth / 2;
+  stageHeight = stageHeight / 2;
+  floorWidth = floorWidth / 2;
+  floorHeight = floorHeight / 2;
+
+  x = stageWidth - floorWidth;
+  y = stageHeight - floorHeight;
+
+  return { X: Number(x), Y: Number(y) };
+}
+
+
+
 form.addEventListener('change', function(e){
   let value = Number(e.target.value);
   if("X" == e.target.name) {
@@ -237,17 +255,27 @@ form.addEventListener('change', function(e){
   }
   let sqrtFootLabel
   if(inputX != 1 && inputY != 1) {
-   sqrtFootLabel = (inputX * inputY);
+   sqrtFootLabel = (inputX * inputY) + 'sqft';
   }
+
+
+
   floorPlanLabel.text(sqrtFootLabel);
   floorplan.width(w);
   floorplan.height(h);
+  group.x(getCenterPoint(stageWidth, stageHeight, w, h).X)
+  group.y(getCenterPoint(stageWidth, stageHeight, w, h).Y)
 
+  if(inputX != 1 && inputY != 1) {
+    lastAddedElementXY[0].x = getCenterPoint(stageWidth, stageHeight, w, h).X; 
+    lastAddedElementXY[0].y = getCenterPoint(stageWidth, stageHeight, w, h).Y;
+  }
 });
 
 form.addEventListener('submit', function(e){
   e.preventDefault();
 });
+
 
 
 const chairGroup = new Konva.Group({
@@ -295,7 +323,6 @@ const selfLabel = new Konva.Text({
   fontSize: 10,
   fill: '#ffffff',
   fontFamily: 'system-ui, -apple-system,"Segoe UI", Roboto,"Helvetica Neue", Arial,"Noto Sans", "Liberation Sans",sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;'
-
 });
 
 const shelf = new Konva.Rect({ 
@@ -305,8 +332,7 @@ const shelf = new Konva.Rect({
     //draggable: true,
     shadowColor: 'rgba(0,0,0,0.15)', 
     shadowBlur: 10, 
-    shadowOffsetY: 4,
-    
+    shadowOffsetY: 4,    
 });    
 
 shelfGroup.add(shelf);
@@ -333,29 +359,68 @@ let shelfI = 0;
 let newChair;
 let selected;
 
+/*
+
+*/
+
+
 addChairButton.addEventListener('click', function(e){
   e.preventDefault();
+  if(chairI = 0) {
+    chairX = lastAddedElementXY[0].x - chairXY - 20;
+    chairY = lastAddedElementXY[0].y;
+  } else {
+     chairX = lastAddedElementXY[0].x - chairXY - 20;
+      chairY = lastAddedElementXY[lastAddedElementXY.length - 1].y;
+  }
   newChair = chairGroup.clone({
     visible: true,
+    x: chairX,
+    y: chairY,
   })
   furniturelayer.add(newChair);
-  tr.nodes([newChair]);
+  //tr.nodes([newChair]);
   selected = newChair;
   furniturelayer.batchDraw();
   chairI++;
+  lastAddedElementXY.push(
+    {
+      x: chairX, 
+      y: chairY + chairXY + 20, 
+      id: newChair._id
+    }
+  );
+  
 });
 
 
 addShelfButton.addEventListener('click', function(e){
   e.preventDefault();
+   if(shelfI = 0) {
+    shelfPosX = (lastAddedElementXY[0].x) - shelfX - 20;
+    shelfPosY = lastAddedElementXY[0].y;
+  } else {
+    shelfPosX = (lastAddedElementXY[0].x) -  shelfX - 20;
+    shelfPosY = lastAddedElementXY[lastAddedElementXY.length - 1].y;
+  }
   const newShelf = shelfGroup.clone({
-    visible: true
+    visible: true,
+    x: shelfPosX,
+    y: shelfPosY,
   });
+ 
   furniturelayer.add(newShelf);
-  tr.nodes([newShelf]);
+  //tr.nodes([newShelf]);
   selected = newShelf;
   furniturelayer.batchDraw();
   shelfI++;
+  lastAddedElementXY.push(
+    {
+      x: shelfPosX, 
+      y: shelfPosY + shelfY + 20, 
+      id: newShelf._id
+    }
+  );
 });
 
 
@@ -414,6 +479,14 @@ stage.on('mouseup touchend', () => {
   tr.nodes(selected);
 });
 
+
+chairGroup.on('dragstart', (event) => {
+  
+});
+
+chairGroup.on('dragend', (event) => {
+});
+
 // clicks should select/deselect shapes
 stage.on('click tap', function (e) {
   if (
@@ -460,6 +533,50 @@ deleteNode.addEventListener('click',function(e){
   furniturelayer.batchDraw();
 });
 
+
+const printStageButton = document.getElementById('print-stage');
+
+printStageButton.addEventListener('click', function(e){
+  e.preventDefault();
+   const dataURL = stage.toDataURL({
+    pixelRatio: 2 // double resolution
+  });
+  
+  // create link to download
+  const link = document.createElement('a');
+  link.download = 'layout.png';
+  link.href = dataURL;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
+
+
+// Function to make the stage responsive
+function fitStageIntoParentContainer() {
+  // Get the container element
+  const container = document.getElementById('create-a-space');
+  
+  // Make the container take up the full width
+  container.style.width = '100%';
+  
+  // Get current container width
+  const containerWidth = container.offsetWidth;
+  
+  // Calculate scale based on virtual width vs actual width
+  const scale = containerWidth / sceneWidth;
+  
+  // Set stage dimensions and scale
+  stage.width(sceneWidth * scale);
+  stage.height(sceneHeight * scale);
+  stage.scale({ x: scale, y: scale });
+}
+
+// Initial fit
+fitStageIntoParentContainer();
+
+// Adapt the stage on window resize
+window.addEventListener('resize', fitStageIntoParentContainer);
 
  /**
   * when a user enters the square footage the app will draw the ratio of the shape at max size.
