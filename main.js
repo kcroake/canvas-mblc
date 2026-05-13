@@ -1,20 +1,360 @@
 //create a stage
 const pixels = 10;
-
 const sceneWidth = 1024;
 const sceneHeight = 720;
-
 const stage = new Konva.Stage({
   container: 'create-a-space',
   width: sceneWidth,
   height: sceneHeight,  
   draggable: true
 });
+let furnitureId = 0;
 
+function createFurnitureId(type) {
+  furnitureId++;
+  return `${type}-${furnitureId}`;
+}
 // Zoom relative to pointer
 const SCALE_FACTOR = 1.05;
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 10;
+const bglayer = new Konva.Layer();
+stage.add(bglayer);
+var gridSpacing = 25;
+var gridRange = 2000;
+for (var x = -gridRange; x <= gridRange; x += gridSpacing) {
+  for (var y = -gridRange; y <= gridRange; y += gridSpacing) {
+    bglayer.add(new Konva.Circle({
+      x: x,
+      y: y,
+      radius: 1,
+      fill: '#848484',
+      listening: false,
+    }));
+  }
+}
+
+const floorlayer = new Konva.Layer();
+const furniturelayer = new Konva.Layer();
+stage.add(floorlayer);
+stage.add(furniturelayer);
+
+const centerx = stage.width() / 4;
+const centery = stage.height() / 4;
+const floorplan = new Konva.Rect({
+    fill: '#acc9f0c1',
+    shadowColor: 'rgba(0,0,0,0.15)', 
+    shadowBlur: 10, 
+    shadowOffsetY: 4,
+});
+let lastAddedElementXY = [{ x: 0, y: 0 }];
+const floorPlanLabel = new Konva.Text();
+const group = new Konva.Group();
+const chairXY = (pixels * 5);
+const shelfX = (pixels * 10);
+const shelfY = (pixels * 3);
+const padding = 20;
+let history  = [];
+let historyStep = -1;
+
+function getFurnitureState() {
+  return stage.find('.furniture').map((node)=> ({
+    id: node.id(),
+    type: node.getAttr('furnitureType'),
+    x: node.x(),
+    y: node.y(),
+    rotation: node.rotation(),
+    visible: node.visible()
+  }));
+}
+
+function saveHistory() {
+  const snapshot = {
+    floor: {
+      x: group.x(),
+      y: group.y(),
+      width: floorplan.width(),
+      height: floorplan.height(),
+      label: floorPlanLabel.text(),
+    },
+    furniture: getFurnitureState(),
+  }
+  history = history.slice(0, historyStep + 1);
+  history.push(JSON.stringify(snapshot));
+  historyStep = history.length - 1;
+}
+
+function loadHistory(step) {
+  const snapshot = JSON.parse(history[step]);
+
+  group.x(snapshot.floor.x);
+  group.y(snapshot.floor.y);
+  floorplan.width(snapshot.floor.width);
+  floorplan.height(snapshot.floor.height);
+  floorPlanLabel.text(snapshot.floor.label);
+
+  stage.find('.furniture').forEach((node)=> {
+    if(node !== chairGroup && node !== shelfGroup) { //change to if not in array ro soomething
+      node.destroy();
+    }
+  });
+
+// Recreate furniture from snapshot
+  snapshot.furniture.forEach((item) => {
+    let node;
+
+    if (item.type === 'chair') {
+      node = chairGroup.clone({
+        id: item.id,
+        visible: item.visible,
+        x: item.x,
+        y: item.y,
+        rotation: item.rotation,
+      });
+      node.setAttr('furnitureType', 'chair');
+    }
+
+    if (item.type === 'shelf') {
+      node = shelfGroup.clone({
+        id: item.id,
+        visible: item.visible,
+        x: item.x,
+        y: item.y,
+        rotation: item.rotation,
+      });
+      node.setAttr('furnitureType', 'shelf');
+    }
+
+    if (node) {
+      furniturelayer.add(node);
+    }
+  });
+
+  tr.nodes([]);
+  furniturelayer.batchDraw();
+  floorlayer.batchDraw();
+}
+
+function undo() {
+  if (historyStep <= 0) return;
+
+  historyStep--;
+  loadHistory(historyStep);
+}
+
+function redo() {
+  if (historyStep >= history.length - 1) return;
+
+  historyStep++;
+  loadHistory(historyStep);
+}
+
+let form = document.querySelector('form');
+const addChairButton = document.getElementById('add-chair');
+const addShelfButton = document.getElementById('add-shelf');
+const deleteNode = document.getElementById('delete-node');
+let initialScale = 1; 
+
+group.add(floorplan);
+group.add(floorPlanLabel);
+floorlayer.add(group);
+
+let w, h, inputX = 1, inputY = 1;
+
+function getCenterPoint(stageWidth, stageHeight, floorWidth, floorHeight){
+  stageWidth = stageWidth / 2;
+  stageHeight = stageHeight / 2;
+  floorWidth = floorWidth / 2;
+  floorHeight = floorHeight / 2;
+
+  x = stageWidth - floorWidth;
+  y = stageHeight - floorHeight;
+
+  return { X: Number(x), Y: Number(y) };
+}
+
+form.addEventListener('change', function(e){
+  let value = Number(e.target.value);
+  if("X" == e.target.name) {
+    inputX = value ? value : 1;
+    w = pixels * value;
+  }
+  if("Y" == e.target.name) {
+    inputY = value ? value : 1;
+    h = pixels * value;
+  }
+  let sqrtFootLabel
+  if(inputX != 1 && inputY != 1) {
+   sqrtFootLabel = (inputX * inputY) + 'sqft';
+  }
+  floorPlanLabel.text(sqrtFootLabel);
+  floorplan.width(w);
+  floorplan.height(h);
+  group.x(getCenterPoint(stageWidth, stageHeight, w, h).X)
+  group.y(getCenterPoint(stageWidth, stageHeight, w, h).Y)
+
+  if(inputX != 1 && inputY != 1) {
+    lastAddedElementXY[0].x = getCenterPoint(stageWidth, stageHeight, w, h).X; 
+    lastAddedElementXY[0].y = getCenterPoint(stageWidth, stageHeight, w, h).Y;
+     saveHistory();
+  }
+});
+
+form.addEventListener('submit', function(e){
+  e.preventDefault();
+});
+
+/*
+* Creating the chair 
+*/
+
+const chairGroup = new Konva.Group({
+  draggable: true,
+  name: 'furniture',
+  visible: false
+});
+
+const chairLabel = new Konva.Text({
+  text: 'Chair 5x5ft',
+  x: 9,
+  y: 2,
+  fontSize: 9,
+  rotation: 45,
+  fill: '#ffffff',
+  fontFamily: 'system-ui, -apple-system,"Segoe UI", Roboto,"Helvetica Neue", Arial,"Noto Sans", "Liberation Sans",sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;'
+});
+
+const chair = new Konva.Rect({ 
+    width: chairXY,
+    height: chairXY,
+    fill: '#1b9c80',
+    //draggable: true,
+    shadowColor: 'rgba(0,0,0,0.15)', 
+    shadowBlur: 10, 
+    shadowOffsetY: 4,    
+});    
+
+chairGroup.add(chair);
+chairGroup.add(chairLabel);
+furniturelayer.add(chairGroup);
+
+
+const shelfGroup = new Konva.Group({
+  draggable: true,
+  name: 'furniture',
+  visible: false
+});
+
+const selfLabel = new Konva.Text({
+  text: 'Shelf 10x3ft',
+  x: 5,
+  y: 5,
+  fontSize: 10,
+  fill: '#ffffff',
+  fontFamily: 'system-ui, -apple-system,"Segoe UI", Roboto,"Helvetica Neue", Arial,"Noto Sans", "Liberation Sans",sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;'
+});
+
+const shelf = new Konva.Rect({ 
+    width: shelfX,
+    height: shelfY,
+    fill: '#1b9c80',
+    shadowColor: 'rgba(0,0,0,0.15)', 
+    shadowBlur: 10, 
+    shadowOffsetY: 4,    
+});    
+
+shelfGroup.add(shelf);
+shelfGroup.add(selfLabel);
+furniturelayer.add(shelfGroup);
+
+/*
+  Adding Transformer
+*/
+
+const tr = new Konva.Transformer({
+  rotateEnabled: true,
+  resizeEnabled: false,
+  borderEnabled: true,
+});
+
+tr.on('transformend', function () {
+  saveHistory();
+});
+
+furniturelayer.add(tr);
+
+let selectionRectangle = new Konva.Rect({
+  fill: 'rgba(0,0,255,0.5)',
+  visible: false,
+});
+
+furniturelayer.add(selectionRectangle);
+
+/*
+* End Adding Transfomer
+*/
+
+let chairI = 0;
+let shelfI = 0;
+let newChair;
+let selected;
+
+addChairButton.addEventListener('click', function(e){
+  e.preventDefault();
+ 
+    chairX = lastAddedElementXY[0].x - chairXY - 20;
+    chairY = lastAddedElementXY[lastAddedElementXY.length - 1].y;
+  
+  newChair = chairGroup.clone({
+    id: createFurnitureId('chair'),
+    visible: true,
+    x: chairX,
+    y: chairY,
+  })
+  newChair.setAttr('furnitureType', 'chair');
+  furniturelayer.add(newChair);
+  //tr.nodes([newChair]);
+  selected = newChair;
+  furniturelayer.batchDraw();
+  chairI++;
+  lastAddedElementXY.push(
+    {
+      x: chairX, 
+      y: chairY + chairXY + 20
+    }
+  );
+  saveHistory();
+  
+});
+
+
+addShelfButton.addEventListener('click', function(e){
+  e.preventDefault();
+  
+    shelfPosX = (lastAddedElementXY[0].x) -  shelfX - 20;
+    shelfPosY = lastAddedElementXY[lastAddedElementXY.length - 1].y;
+  
+  const newShelf = shelfGroup.clone({
+    visible: true,
+    id: createFurnitureId('shelf'),
+    x: shelfPosX,
+    y: shelfPosY,
+  });
+ newShelf.setAttr('furnitureType', 'shelf');
+  furniturelayer.add(newShelf);
+  //tr.nodes([newShelf]);
+  selected = newShelf;
+  furniturelayer.batchDraw();
+  shelfI++;
+  lastAddedElementXY.push(
+    {
+      x: shelfPosX, 
+      y: shelfPosY + shelfY + 20, 
+    }
+  );
+  saveHistory();
+});
+
 
 stage.on('wheel', function (event) {
   // Prevent page scrolling
@@ -178,252 +518,12 @@ stage.on('dragend', function () {
     clearInterval(scrollInterval);
     scrollInterval = null;
   }
-});
+  const furnitureNode = event.target.findAncestor('.furniture', true);
 
-const bglayer = new Konva.Layer();
-stage.add(bglayer);
-var gridSpacing = 25;
-var gridRange = 2000;
-for (var x = -gridRange; x <= gridRange; x += gridSpacing) {
-  for (var y = -gridRange; y <= gridRange; y += gridSpacing) {
-    bglayer.add(new Konva.Circle({
-      x: x,
-      y: y,
-      radius: 1,
-      fill: '#848484',
-      listening: false,
-    }));
-  }
-}
-
-const floorlayer = new Konva.Layer();
-const furniturelayer = new Konva.Layer();
-stage.add(floorlayer);
-stage.add(furniturelayer);
-
-const centerx = stage.width() / 4;
-const centery = stage.height() / 4;
-const floorplan = new Konva.Rect({
-    fill: '#acc9f0c1',
-    shadowColor: 'rgba(0,0,0,0.15)', 
-    shadowBlur: 10, 
-    shadowOffsetY: 4,
-});
-
-const floorPlanLabel = new Konva.Text();
-const group = new Konva.Group();
-const chairXY = (pixels * 5);
-const shelfX = (pixels * 10);
-const shelfY = (pixels * 3);
-const padding = 20;
-let lastAddedElementXY = [{x: 0, y: 0, id: 0}];
-let form = document.querySelector('form');
-const addChairButton = document.getElementById('add-chair');
-const addShelfButton = document.getElementById('add-shelf');
-const deleteNode = document.getElementById('delete-node');
-let initialScale = 1; 
-
-group.add(floorplan);
-group.add(floorPlanLabel);
-floorlayer.add(group);
-
-let w, h, inputX = 1, inputY = 1;
-
-function getCenterPoint(stageWidth, stageHeight, floorWidth, floorHeight){
-  stageWidth = stageWidth / 2;
-  stageHeight = stageHeight / 2;
-  floorWidth = floorWidth / 2;
-  floorHeight = floorHeight / 2;
-
-  x = stageWidth - floorWidth;
-  y = stageHeight - floorHeight;
-
-  return { X: Number(x), Y: Number(y) };
-}
-
-
-
-form.addEventListener('change', function(e){
-  let value = Number(e.target.value);
-  if("X" == e.target.name) {
-    inputX = value ? value : 1;
-    w = pixels * value;
-  }
-  if("Y" == e.target.name) {
-    inputY = value ? value : 1;
-    h = pixels * value;
-  }
-  let sqrtFootLabel
-  if(inputX != 1 && inputY != 1) {
-   sqrtFootLabel = (inputX * inputY) + 'sqft';
-  }
-
-
-
-  floorPlanLabel.text(sqrtFootLabel);
-  floorplan.width(w);
-  floorplan.height(h);
-  group.x(getCenterPoint(stageWidth, stageHeight, w, h).X)
-  group.y(getCenterPoint(stageWidth, stageHeight, w, h).Y)
-
-  if(inputX != 1 && inputY != 1) {
-    lastAddedElementXY[0].x = getCenterPoint(stageWidth, stageHeight, w, h).X; 
-    lastAddedElementXY[0].y = getCenterPoint(stageWidth, stageHeight, w, h).Y;
+  if (furnitureNode) {
+    saveHistory();
   }
 });
-
-form.addEventListener('submit', function(e){
-  e.preventDefault();
-});
-
-
-
-const chairGroup = new Konva.Group({
-  draggable: true,
-  name: 'furniture',
-  visible: false
-});
-
-const chairLabel = new Konva.Text({
-  text: 'Chair 5x5ft',
-  x: 9,
-  y: 2,
-  fontSize: 9,
-  rotation: 45,
-  fill: '#ffffff',
-  fontFamily: 'system-ui, -apple-system,"Segoe UI", Roboto,"Helvetica Neue", Arial,"Noto Sans", "Liberation Sans",sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;'
-});
-
-const chair = new Konva.Rect({ 
-    width: chairXY,
-    height: chairXY,
-    fill: '#1b9c80',
-    //draggable: true,
-    shadowColor: 'rgba(0,0,0,0.15)', 
-    shadowBlur: 10, 
-    shadowOffsetY: 4,
-    
-});    
-
-chairGroup.add(chair);
-chairGroup.add(chairLabel);
-furniturelayer.add(chairGroup);
-
-
-const shelfGroup = new Konva.Group({
-  draggable: true,
-  name: 'furniture',
-  visible: false
-});
-
-const selfLabel = new Konva.Text({
-  text: 'Shelf 10x3ft',
-  x: 5,
-  y: 5,
-  fontSize: 10,
-  fill: '#ffffff',
-  fontFamily: 'system-ui, -apple-system,"Segoe UI", Roboto,"Helvetica Neue", Arial,"Noto Sans", "Liberation Sans",sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;'
-});
-
-const shelf = new Konva.Rect({ 
-    width: shelfX,
-    height: shelfY,
-    fill: '#1b9c80',
-    //draggable: true,
-    shadowColor: 'rgba(0,0,0,0.15)', 
-    shadowBlur: 10, 
-    shadowOffsetY: 4,    
-});    
-
-shelfGroup.add(shelf);
-shelfGroup.add(selfLabel);
-furniturelayer.add(shelfGroup);
-
-const tr = new Konva.Transformer({
-  rotateEnabled: true,
-  resizeEnabled: false,
-  borderEnabled: true,
-});
-
-furniturelayer.add(tr);
-
-let selectionRectangle = new Konva.Rect({
-  fill: 'rgba(0,0,255,0.5)',
-  visible: false,
-});
-
-furniturelayer.add(selectionRectangle);
-
-let chairI = 0;
-let shelfI = 0;
-let newChair;
-let selected;
-
-/*
-
-*/
-
-
-addChairButton.addEventListener('click', function(e){
-  e.preventDefault();
-  if(chairI = 0) {
-    chairX = lastAddedElementXY[0].x - chairXY - 20;
-    chairY = lastAddedElementXY[0].y;
-  } else {
-     chairX = lastAddedElementXY[0].x - chairXY - 20;
-      chairY = lastAddedElementXY[lastAddedElementXY.length - 1].y;
-  }
-  newChair = chairGroup.clone({
-    visible: true,
-    x: chairX,
-    y: chairY,
-  })
-  furniturelayer.add(newChair);
-  //tr.nodes([newChair]);
-  selected = newChair;
-  furniturelayer.batchDraw();
-  chairI++;
-  lastAddedElementXY.push(
-    {
-      x: chairX, 
-      y: chairY + chairXY + 20, 
-      id: newChair._id
-    }
-  );
-  
-});
-
-
-addShelfButton.addEventListener('click', function(e){
-  e.preventDefault();
-   if(shelfI = 0) {
-    shelfPosX = (lastAddedElementXY[0].x) - shelfX - 20;
-    shelfPosY = lastAddedElementXY[0].y;
-  } else {
-    shelfPosX = (lastAddedElementXY[0].x) -  shelfX - 20;
-    shelfPosY = lastAddedElementXY[lastAddedElementXY.length - 1].y;
-  }
-  const newShelf = shelfGroup.clone({
-    visible: true,
-    x: shelfPosX,
-    y: shelfPosY,
-  });
- 
-  furniturelayer.add(newShelf);
-  //tr.nodes([newShelf]);
-  selected = newShelf;
-  furniturelayer.batchDraw();
-  shelfI++;
-  lastAddedElementXY.push(
-    {
-      x: shelfPosX, 
-      y: shelfPosY + shelfY + 20, 
-      id: newShelf._id
-    }
-  );
-});
-
-
 
 let x1, y1, x2, y2;
 stage.on('mousedown touchstart', (e) => {
@@ -527,7 +627,17 @@ stage.on('click tap', function (e) {
 });
 
 deleteNode.addEventListener('click',function(e){
-  e.preventDefault();
+   e.preventDefault();
+
+  if (!selected) return;
+
+  selected.destroy();
+  selected = null;
+
+  tr.nodes([]);
+  furniturelayer.batchDraw();
+
+  saveHistory();e.preventDefault();
   selected.remove();
   tr.nodes([]);
   furniturelayer.batchDraw();
@@ -572,15 +682,25 @@ function fitStageIntoParentContainer() {
   stage.scale({ x: scale, y: scale });
 }
 
+window.addEventListener('keydown', function(e) {
+  const isUndo = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey;
+  const isRedo =
+    ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+    ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z');
+
+  if (isUndo) {
+    e.preventDefault();
+    undo();
+  }
+
+  if (isRedo) {
+    e.preventDefault();
+    redo();
+  }
+});
+saveHistory();
 // Initial fit
 fitStageIntoParentContainer();
 
 // Adapt the stage on window resize
 window.addEventListener('resize', fitStageIntoParentContainer);
-
- /**
-  * when a user enters the square footage the app will draw the ratio of the shape at max size.
-  * take the height and width convert to pixels divide by height and width of the canvas 
-  * 
-  * a user can then add elements from a tool bar
-  */
