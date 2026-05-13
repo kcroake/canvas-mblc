@@ -513,12 +513,12 @@ stage.on('dragstart', function (event) {
   }, FRAME_DURATION_MS);
 });
 
-stage.on('dragend', function () {
+stage.on('dragend', function (e) {
   if (scrollInterval !== null) {
     clearInterval(scrollInterval);
     scrollInterval = null;
   }
-  const furnitureNode = event.target.findAncestor('.furniture', true);
+  const furnitureNode = e.target.findAncestor('.furniture', true);
 
   if (furnitureNode) {
     saveHistory();
@@ -577,14 +577,6 @@ stage.on('mouseup touchend', () => {
     Konva.Util.haveIntersection(box, shape.getClientRect())
   );
   tr.nodes(selected);
-});
-
-
-chairGroup.on('dragstart', (event) => {
-  
-});
-
-chairGroup.on('dragend', (event) => {
 });
 
 // clicks should select/deselect shapes
