@@ -629,10 +629,7 @@ deleteNode.addEventListener('click',function(e){
   tr.nodes([]);
   furniturelayer.batchDraw();
 
-  saveHistory();e.preventDefault();
-  selected.remove();
-  tr.nodes([]);
-  furniturelayer.batchDraw();
+  saveHistory();
 });
 
 
@@ -643,14 +640,16 @@ printStageButton.addEventListener('click', function(e){
    const dataURL = stage.toDataURL({
     pixelRatio: 2 // double resolution
   });
+
+  window.open(dataURL, 'popupWindow');
   
-  // create link to download
-  const link = document.createElement('a');
-  link.download = 'layout.png';
-  link.href = dataURL;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  //create link to download
+  // const link = document.createElement('a');
+  // link.download = 'layout.png';
+  // link.href = dataURL;
+  // document.body.appendChild(link);
+  // link.click();
+  // document.body.removeChild(link);
 });
 
 
